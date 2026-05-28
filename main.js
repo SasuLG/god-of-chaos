@@ -10,7 +10,8 @@ export const RENDER_DISTANCE = 20
 
 //plus petit, plus fluide mais lent à charger
 const CHUNK_BATCH = 20
-const MIN_LOADING_TIME = 30
+// const MIN_LOADING_TIME = 30
+const MIN_LOADING_TIME = 3
 
 export const loader = new GLTFLoader()
 
@@ -55,39 +56,52 @@ loadingCamera.lookAt(character.position)
 
 export const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000)
-camera.position.set(-350, 300, -50)
+camera.position.set(-250, 50, -50)
+// camera.position.set(-350, 300, -50)
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
 document.body.appendChild(renderer.domElement)
 scene.background = new THREE.Color(0x000000)
-scene.add(new THREE.AxesHelper(5, 5, 5))
+// scene.add(new THREE.AxesHelper(500, 500, 500))
 const controls = new OrbitControls(camera, renderer.domElement)
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
 scene.add(ambientLight);
-// scene.background = new THREE.Color(0x87b5ff)
 let worldReady = false
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 2);
 sunLight.position.set(50, 50, 50);
 scene.add(sunLight);
-// scene.fog = new THREE.Fog(0xbfd1e5, 50, 200);
+
+// scene.fog = new THREE.Fog(0x87b5ff, 200, 1800);
+// scene.background = new THREE.Color(0x87b5ff)
 
 const gltf = await loader.loadAsync(import.meta.env.BASE_URL + 'totosAnim.glb');
-gltf.scene.position.set(0, 10, 0)
-gltf.scene.rotation.y = Math.PI / -2
+// gltf.scene.position.set(0, 10, 0)
+gltf.scene.position.set(200, 400, 0)
+gltf.scene.rotation.y = Math.PI / -1.25
 gltf.scene.scale.set(20, 20, 20)
 scene.add(gltf.scene)
 const godsMixer = new THREE.AnimationMixer(gltf.scene)
 
+const actions = []
+gltf.animations[1].tracks = gltf.animations[1].tracks = gltf.animations[1].tracks.filter(track => {return !(track.name.includes('.position'));});
+gltf.animations.forEach(clip => {
+  const action = godsMixer.clipAction(clip)
+  actions.push(action)
+})
 
-// const oui = await loader.loadAsync(import.meta.env.BASE_URL + 'humainAnim.glb');
-// oui.scene.position.set(0, 10, 0)
-// oui.scene.rotation.y = Math.PI / -2
-// oui.scene.scale.set(20, 20, 20)
-// scene.add(oui.scene)
-const player = new Player()
-player.init()
+export let playerModel = null
+async function loadAssets() {
+  playerModel = await loader.loadAsync(import.meta.env.BASE_URL + 'humainAnim.glb')
+}
+await loadAssets()
 
+const players = []
+for(let i = 0; i <  5; i++){
+  const player = new Player()
+  player.init()
+  players.push(player)
+}
 
 const terrainMaterial = new THREE.MeshStandardMaterial({vertexColors: true,flatShading: true});
 terrainMaterial.onBeforeCompile = (shader) => {
@@ -123,20 +137,16 @@ const simplex = new SimplexNoise();
 let lastChunkX = null;
 let lastChunkZ = null;
 
+let keysPressed = {}
+document.body.addEventListener("keydown", (e)=>{
+  keysPressed[e.key] = true
+})
+
+document.body.addEventListener("keyup", (e)=>{
+  keysPressed[e.key] = false
+})
+
 document.body.addEventListener("keydown", (event) => {
-  if (event.key === "z") gltf.scene.position.z += 2
-  if (event.key === "s") gltf.scene.position.z -= 2
-  if (event.key === "q") gltf.scene.position.x += 2
-  if (event.key === "d") gltf.scene.position.x -= 2
-
-  if (event.key === " ") gltf.scene.position.y += 2
-  if (event.key === "a") gltf.scene.position.y -= 2
-
-  const action = godsMixer.clipAction(gltf.animations[1])
-  // action.setLoop(THREE.LoopOnce, 1);
-  action.play()
-  gltf.scene.position.y = getHeight2(gltf.scene.position.x, gltf.scene.position.z) + 10
-  // camera.position.set(gltf.scene.position.x + 10, gltf.scene.position.y + 10, gltf.scene.position.z + 10)
   updateChunk(gltf.scene.position.x, gltf.scene.position.z)
 })
 
@@ -457,7 +467,20 @@ function buildChunk(chunkX, chunkZ, key, lod = VERTICES) {
   world.set(key, mesh);
 }
 
+const cameraOffset = new THREE.Vector3(30, 60, -20)
+const cameraLookOffset = new THREE.Vector3(0, -40, 0)
 const clock = new THREE.Clock()
+let animationDuration = 120
+let factor = 1
+const speed = 1
+
+let shake = {duration: 0, strength: 0};
+const originalPos = new THREE.Vector3();
+function explodeShake(power = 0.5, time = 0.4) {
+  shake.strength = power;
+  shake.duration = time;
+}
+
 function animate() {
   requestAnimationFrame(animate)
   const delta = clock.getDelta()
@@ -469,9 +492,73 @@ function animate() {
     return
   }
   controls.update();
-  renderer.render(scene, camera);
-
+  // renderer.render(scene, camera);
   godsMixer.update(delta)
+  
+  players.forEach(player => {
+    player.update(delta)
+    player.gltf.scene.position.y = getHeight2(player.gltf.scene.position.x, player.gltf.scene.position.z) + 10
+  })
+
+  const targetPosition = gltf.scene.position.clone()
+  const desiredCameraPos = targetPosition.clone().add(cameraOffset)
+  // camera.position.lerp(desiredCameraPos, 0.05)
+  // camera.position.lerp(desiredCameraPos, 0.01)
+  const lookTarget = targetPosition.clone().add(cameraLookOffset)
+  // camera.lookAt(lookTarget)
+
+  originalPos.copy(camera.position);
+
+  if (shake.duration > 0) {
+    shake.duration -= delta;
+    const currentStrength = shake.strength * (shake.duration / 0.4);
+    camera.position.x += (Math.random() - 0.5) * currentStrength;
+    camera.position.y += (Math.random() - 0.5) * currentStrength;
+    camera.position.z += (Math.random() - 0.5) * currentStrength;
+  }
+  
+  renderer.render(scene, camera);
+  camera.position.copy(originalPos);
+
+  animationDuration--
+  if(animationDuration <= 0){
+    animationDuration = 120
+    factor = -factor
+  }
+  gltf.scene.position.y += 0.025 * factor
+
+  const direction = new THREE.Vector3();
+  if(keysPressed["Enter"] && !actions[0].isRunning() && !actions[2].isRunning()) {
+    godsMixer.stopAllAction()
+    actions[0].setLoop(THREE.LoopOnce, 1)
+    actions[0].reset().play()
+  }
+  else if(keysPressed["e"] && !actions[0].isRunning() && !actions[2].isRunning()) {
+    godsMixer.stopAllAction()
+    actions[2].setLoop(THREE.LoopOnce, 1)
+    actions[2].reset().play()
+    
+    explodeShake(2.5, 0.5);
+  }
+
+  if(!actions[0].isRunning() && !actions[2].isRunning()){ 
+    if(keysPressed["z"]) direction.x -= speed
+    if(keysPressed["s"]) direction.x += speed
+    if(keysPressed["q"]) direction.z += speed
+    if(keysPressed["d"]) direction.z -= speed
+
+    if(direction.length() > 0){
+      direction.normalize()
+      const angle = Math.atan2(direction.x, direction.z)
+      gltf.scene.rotation.y = angle
+      gltf.scene.position.x += direction.x * speed;
+      gltf.scene.position.z += direction.z * speed;
+      actions[1].play()
+    }else{
+      actions[1].stop()
+    }
+  }
+
 
   if (terrainMaterial.userData.shader) terrainMaterial.userData.shader.uniforms.playerPosition.value.copy(gltf.scene.position);
 }
@@ -491,7 +578,7 @@ async function initWorld() {
   }
   worldReady = true
   loadingOverlay.remove()
-  gltf.scene.position.y = getHeight2(gltf.scene.position.x, gltf.scene.position.z) + 10
+  // gltf.scene.position.y = getHeight2(gltf.scene.position.x, gltf.scene.position.z) + 10
 }
 
 initWorld()
