@@ -41,7 +41,7 @@ const loadingDirectional = new THREE.DirectionalLight(0xffffff, 5)
 loadingDirectional.position.set(10, 20, 10)
 loadingScene.add(loadingDirectional)
 
-const gltf2 = await loader.loadAsync('loadingTotos.glb')
+const gltf2 = await loader.loadAsync(import.meta.env.BASE_URL + 'loadingTotos.glb')
 const character = gltf2.scene
 character.position.set(0, 0, 0)
 character.scale.set(50, 50, 50)
@@ -62,7 +62,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
 document.body.appendChild(renderer.domElement)
 scene.background = new THREE.Color(0x000000)
-// scene.add(new THREE.AxesHelper(500, 500, 500))
+scene.add(new THREE.AxesHelper(500, 500, 500))
 const controls = new OrbitControls(camera, renderer.domElement)
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
 scene.add(ambientLight);
