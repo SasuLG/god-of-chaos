@@ -7,6 +7,7 @@ import { Player } from './human.js'
 export const CHUNK_SIZE = 64;
 const VERTICES = 64
 export const RENDER_DISTANCE = 20
+// export const RENDER_DISTANCE = 10
 
 //plus petit, plus fluide mais lent à charger
 const CHUNK_BATCH = 20
